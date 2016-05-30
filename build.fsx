@@ -44,8 +44,10 @@ let tags = ""
 //let solutionFile  = "gauge-csharp.sln"
 
 // Pattern specifying assemblies to be tested using NUnit
-let testAssemblies = "artifacts/gauge-csharp/bin/*Test*.dll"
-let testAssembliesLib = "artifacts/gauge-csharp-lib/*Tests*.dll"
+let testAssemblies = "artifacts/gauge-csharp/*tests/*Test*.dll"
+let testAssembliesLib = "artifacts/gauge-csharp-lib/tests/*Test*.dll"
+let testAssembliesRunner = "artifacts/gauge-csharp/tests/*Test*.dll"
+let itestAssembliesRunner = "artifacts/gauge-csharp/itests/*Test*.dll"
 let testReportOutput = "artifacts/gauge-csharp/bin/gauge.csharp.runner.unittests.xml"
 
 // Git configuration (used for publishing documentation in gh-pages branch)
@@ -70,9 +72,12 @@ let (|Fsproj|Csproj|Vbproj|Shproj|) (projFileName:string) =
 
 let artifactsDir f =
     match f with
-    | path when (System.IO.Path.GetFileNameWithoutExtension path).StartsWith("Gauge.CSharp.Lib") -> "gauge-csharp-lib"
-    | path when (System.IO.Path.GetFileNameWithoutExtension path).StartsWith("Gauge.CSharp.Core") -> "gauge-csharp-core"
-    | path when (System.IO.Path.GetFileNameWithoutExtension path).StartsWith("Gauge.CSharp.Runner") -> "gauge-csharp/bin"
+    | path when (System.IO.Path.GetFileNameWithoutExtension path).Equals("Gauge.CSharp.Lib") -> "gauge-csharp-lib/bin"
+    | path when (System.IO.Path.GetFileNameWithoutExtension path).Equals("Gauge.CSharp.Lib.UnitTests") -> "gauge-csharp-lib/tests"
+    | path when (System.IO.Path.GetFileNameWithoutExtension path).Equals("Gauge.CSharp.Core") -> "gauge-csharp-core/bin"
+    | path when (System.IO.Path.GetFileNameWithoutExtension path).Equals("Gauge.CSharp.Runner") -> "gauge-csharp/bin"
+    | path when (System.IO.Path.GetFileNameWithoutExtension path).Equals("Gauge.CSharp.Runner.UnitTests") -> "gauge-csharp/tests"
+    | path when (System.IO.Path.GetFileNameWithoutExtension path).Equals("Gauge.CSharp.Runner.IntegrationTests") -> "gauge-csharp/itests"
     | _                           -> failwith (sprintf "Unknown project %s. Where should its artifacts be copied to?" f)
 
 // Copies binaries from default VS location to expected bin folder
@@ -85,7 +90,8 @@ Target "CopyBinaries" (fun _ ->
     -- "**/Gauge.Spec.csproj"
     |>  Seq.map (fun f -> ((System.IO.Path.GetDirectoryName f) </> "bin/Release", "artifacts" </> (artifactsDir f)))
     |>  Seq.iter (fun (fromDir, toDir) -> CopyDir toDir fromDir (fun _ -> true))
-    CopyDir "artifacts/gauge-csharp/bin" "IntegrationTestSample/gauge-bin" (fun _ -> true)
+    // copy only
+    CopyFile "artifacts/gauge-csharp/bin" "IntegrationTestSample/gauge-bin/IntegrationTestSample.dll"
 )
 
 // --------------------------------------------------------------------------------------
@@ -131,13 +137,31 @@ Target "RunTests-Lib" (fun _ ->
             OutputFile = "TestResults-Lib.xml" })
 )
 
-Target "RunTests" (fun _ ->
+Target "RunTests-Runner" (fun _ ->
+    !! testAssembliesRunner
+    |> NUnit (fun p ->
+        { p with
+            DisableShadowCopy = true
+            TimeOut = TimeSpan.FromMinutes 5.
+            OutputFile = "TestResults-Runner.xml" })
+)
+
+Target "RunITests-Runner" (fun _ ->
+    !! itestAssembliesRunner
+    |> NUnit (fun p ->
+        { p with
+            DisableShadowCopy = true
+            TimeOut = TimeSpan.FromMinutes 5.
+            OutputFile = "ITestResults-Runner.xml" })
+)
+
+Target "RunTests-All" (fun _ ->
     !! testAssemblies
     |> NUnit (fun p ->
         { p with
             DisableShadowCopy = true
             TimeOut = TimeSpan.FromMinutes 5.
-            OutputFile = testReportOutput })
+            OutputFile = "ITestResults-Runner.xml" })
 )
 
 #if MONO
@@ -177,6 +201,7 @@ Target "PublishNuget" (fun _ ->
 
 Target "BuildPackage" DoNothing
 Target "Build" DoNothing
+Target "RunTests" DoNothing
 
 // --------------------------------------------------------------------------------------
 // Run all targets by default. Invoke 'build <Target>' to override
@@ -189,9 +214,11 @@ Target "All" DoNothing
   ==> "Build"
   ==> "CopyBinaries"
 
-"Build-Lib"
+"CopyBinaries"
   ==> "RunTests-Lib"
-
+  ==> "RunTests-Runner"
+  ==> "RunITests-Runner"
+  ==> "RunTests"
 
 "Clean"
 //  ==> "AssemblyInfo"
