@@ -2,7 +2,9 @@ Gauge.CSharp.Core
 Gauge.CSharp.Lib
 Google.ProtocolBuffers
 Microsoft.Web.Xdt
-Moq
 NuGet.Core
-NUnit
-NUnit.Runners
+
+group Test
+  Moq
+  NUnit
+  NUnit.Runners

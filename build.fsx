@@ -44,8 +44,9 @@ let tags = ""
 //let solutionFile  = "gauge-csharp.sln"
 
 // Pattern specifying assemblies to be tested using NUnit
-let testAssemblies = "tests/**/bin/Release/*Tests*.dll"
-let testAssembliesLib = "Lib.UnitTests/bin/Release/*Tests*.dll"
+let testAssemblies = "artifacts/gauge-csharp/bin/*Test*.dll"
+let testAssembliesLib = "artifacts/gauge-csharp-lib/*Tests*.dll"
+let testReportOutput = "artifacts/gauge-csharp/bin/gauge.csharp.runner.unittests.xml"
 
 // Git configuration (used for publishing documentation in gh-pages branch)
 // The profile where the project is posted
@@ -67,14 +68,24 @@ let (|Fsproj|Csproj|Vbproj|Shproj|) (projFileName:string) =
     | f when f.EndsWith("shproj") -> Shproj
     | _                           -> failwith (sprintf "Project file %s not supported. Unknown project type." projFileName)
 
+let artifactsDir f =
+    match f with
+    | path when (System.IO.Path.GetFileNameWithoutExtension path).StartsWith("Gauge.CSharp.Lib") -> "gauge-csharp-lib"
+    | path when (System.IO.Path.GetFileNameWithoutExtension path).StartsWith("Gauge.CSharp.Core") -> "gauge-csharp-core"
+    | path when (System.IO.Path.GetFileNameWithoutExtension path).StartsWith("Gauge.CSharp.Runner") -> "gauge-csharp/bin"
+    | _                           -> failwith (sprintf "Unknown project %s. Where should its artifacts be copied to?" f)
+
 // Copies binaries from default VS location to expected bin folder
 // But keeps a subdirectory structure for each project in the
 // src folder to support multiple project outputs
 Target "CopyBinaries" (fun _ ->
-    !! "src/**/*.??proj"
-    -- "src/**/*.shproj"
-    |>  Seq.map (fun f -> ((System.IO.Path.GetDirectoryName f) </> "bin/Release", "bin" </> (System.IO.Path.GetFileNameWithoutExtension f)))
+    !! "**/*.??proj"
+    -- "**/*.shproj"
+    -- "**/IntegrationTestSample.csproj"
+    -- "**/Gauge.Spec.csproj"
+    |>  Seq.map (fun f -> ((System.IO.Path.GetDirectoryName f) </> "bin/Release", "artifacts" </> (artifactsDir f)))
     |>  Seq.iter (fun (fromDir, toDir) -> CopyDir toDir fromDir (fun _ -> true))
+    CopyDir "artifacts/gauge-csharp/bin" "IntegrationTestSample/gauge-bin" (fun _ -> true)
 )
 
 // --------------------------------------------------------------------------------------
@@ -100,11 +111,13 @@ Target "Build-Lib" (fun _ ->
     buildSln "Gauge.CSharp.Lib.sln"
 )
 
-//TODO Target "Build-Core" (fun _ ->
-//    buildSln "Gauge.CSharp.Core.sln"
-//)
+Target "Build-Core" (fun _ ->
+    buildSln "Gauge.CSharp.Core.sln"
+)
 
-//TODO Build-Runner
+Target "Build-Runner" (fun _ ->
+    buildSln "Gauge.CSharp.sln"
+)
 
 // --------------------------------------------------------------------------------------
 // Run the unit tests using test runner
@@ -118,14 +131,13 @@ Target "RunTests-Lib" (fun _ ->
             OutputFile = "TestResults-Lib.xml" })
 )
 
-//TODO remove, replace by running all tests
 Target "RunTests" (fun _ ->
     !! testAssemblies
     |> NUnit (fun p ->
         { p with
             DisableShadowCopy = true
-            TimeOut = TimeSpan.FromMinutes 20.
-            OutputFile = "TestResults.xml" })
+            TimeOut = TimeSpan.FromMinutes 5.
+            OutputFile = testReportOutput })
 )
 
 #if MONO
@@ -172,16 +184,17 @@ Target "Build" DoNothing
 Target "All" DoNothing
 
 "Build-Lib"
+  ==> "Build-Core"
+  ==> "Build-Runner"
   ==> "Build"
+  ==> "CopyBinaries"
 
 "Build-Lib"
   ==> "RunTests-Lib"
 
-//  ==> "RunTests"
 
 "Clean"
 //  ==> "AssemblyInfo"
-  ==> "Build"
   ==> "CopyBinaries"
   ==> "RunTests"
   ==> "All"
