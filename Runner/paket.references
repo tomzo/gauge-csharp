@@ -1,0 +1,11 @@
+Gauge.CSharp.Core
+Gauge.CSharp.Lib
+Google.ProtocolBuffers
+Microsoft.CodeAnalysis.Analyzers
+Microsoft.CodeAnalysis.Common
+Microsoft.CodeAnalysis.CSharp
+Microsoft.Web.Xdt
+NLog
+NuGet.Core
+System.Collections.Immutable
+System.Reflection.Metadata
