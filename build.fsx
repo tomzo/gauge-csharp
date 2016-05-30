@@ -120,6 +120,23 @@ Target "Build-Runner" (fun _ ->
 )
 
 // --------------------------------------------------------------------------------------
+// Zip distribution
+
+Target "Skel" (fun _ ->
+    CopyDir "artifacts/gauge-csharp/skel" "Gauge.Project.Skel/" (fun _ -> true)
+    CopyFile "artifacts/gauge-csharp/csharp.json" "Runner/csharp.json"
+)
+
+//TODO version from runner assembly
+let version = "0.8.0" 
+
+Target "Zip" (fun _ ->
+    !! ("artifacts/gauge-csharp/**/*")
+    -- ("**/*.zip")
+        |> Zip "artifacts/gauge-csharp/" (sprintf @"artifacts/gauge-csharp/gauge-csharp-%s.zip" version)
+)
+
+// --------------------------------------------------------------------------------------
 // Run the unit tests using test runner
 
 Target "RunTests-Lib" (fun _ ->
@@ -198,6 +215,10 @@ Target "All" DoNothing
   ==> "CopyBinaries"
   ==> "RunTests"
   ==> "All"
+
+"CopyBinaries"
+  ==> "Skel"
+  ==> "Zip"
 
 
 "All"
